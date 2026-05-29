@@ -1,0 +1,29 @@
+filters:
+  and:
+    - 'note.type == "project"'
+
+properties:
+  note.project:
+    displayName: Repo
+  note.status:
+    displayName: Status
+  note.last_session:
+    displayName: Last session
+  note.session_count:
+    displayName: Sessions
+  note.path:
+    displayName: Path
+
+views:
+  - type: table
+    name: Repos
+    order:
+      - note.project
+      - note.status
+      - note.last_session
+      - note.session_count
+      - note.path
+    sort:
+      - property: note.last_session
+        direction: DESC
+    limit: 100

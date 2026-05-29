@@ -1,0 +1,188 @@
+/* ============================================================
+   Mission Control — Swiss / Bauhaus dark console
+   Single signal-orange accent. Monospace for code + IDs.
+   Theme-agnostic: overrides Obsidian core variables, so it
+   works with or without the Minimal theme.
+   ============================================================ */
+
+.theme-dark {
+  /* --- surfaces --- */
+  --background-primary:        #0D0E10;
+  --background-primary-alt:    #15171A;
+  --background-secondary:      #15171A;
+  --background-secondary-alt:  #1C1F23;
+  --background-modifier-hover:        #1C1F23;
+  --background-modifier-active-hover: #1C1F23;
+  --background-modifier-border:        #262A2F;
+  --background-modifier-border-hover:  #2E343A;
+  --background-modifier-border-focus:  #FF5A1F;
+
+  /* --- text --- */
+  --text-normal:  #E8E9EB;
+  --text-muted:   #9BA1A8;
+  --text-faint:   #6B7178;
+  --text-on-accent: #0D0E10;
+
+  /* --- accent: the only loud color --- */
+  --interactive-accent:        #FF5A1F;
+  --interactive-accent-hover:  #E14E16;
+  --text-accent:               #FF5A1F;
+  --text-accent-hover:         #E14E16;
+  --color-accent:              #FF5A1F;
+  --color-accent-1:            #FF5A1F;
+  --color-accent-2:            #E14E16;
+
+  /* --- type --- */
+  --font-text-theme:      "Inter", "IBM Plex Sans", -apple-system, system-ui, sans-serif;
+  --font-interface-theme: "Inter", "IBM Plex Sans", -apple-system, system-ui, sans-serif;
+  --font-monospace-theme: "JetBrains Mono", "IBM Plex Mono", "Cascadia Mono", Consolas, monospace;
+
+  --font-text-size: 16px;
+  --line-height-normal: 1.6;
+  --line-height-tight: 1.2;
+
+  /* --- grid / density --- */
+  --radius-s: 2px;
+  --radius-m: 3px;
+  --radius-l: 4px;
+  --file-line-width: 720px;
+  --hr-color: var(--background-modifier-border);
+}
+
+/* Headings: tight, editorial, left-aligned */
+.markdown-rendered h1,
+.markdown-rendered h2,
+.markdown-rendered h3,
+.cm-header {
+  line-height: var(--line-height-tight);
+  letter-spacing: -0.01em;
+  font-weight: 650;
+}
+
+/* Section-label convention: small uppercase tracked muted text.
+   Use as: <span class="label">overview</span> */
+.label,
+.markdown-rendered .label {
+  font-family: var(--font-monospace-theme);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-faint);
+}
+
+/* IDs, inline code, dates rendered monospace + faintly boxed */
+code,
+.cm-inline-code {
+  font-family: var(--font-monospace-theme);
+  font-size: 0.88em;
+  background: var(--background-secondary-alt);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-s);
+  padding: 0.05em 0.35em;
+}
+
+/* Hairline rule */
+hr,
+.markdown-rendered hr {
+  border: none;
+  border-top: 1px solid var(--background-modifier-border);
+  margin: 1.6em 0;
+}
+
+/* ---------------- Bases table + cards ---------------- */
+.bases-table,
+.bases-cards {
+  font-size: 14px;
+}
+
+/* Column headers: uppercase, muted, tracked */
+.bases-table thead th,
+.bases-tr.bases-th .bases-td {
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 11px;
+  color: var(--text-faint);
+  font-weight: 600;
+}
+
+/* Hairline rows, tight rhythm */
+.bases-table td,
+.bases-table th,
+.bases-td {
+  border-color: var(--background-modifier-border);
+  padding-top: 6px;
+  padding-bottom: 6px;
+}
+
+.bases-table tbody tr:hover,
+.bases-tr:hover {
+  background: var(--background-modifier-hover);
+}
+
+/* Monospace the ID / path / date-ish columns by value shape:
+   Bases renders inline code for `backticked` frontmatter, which
+   the rule above already styles. Card titles stay sans. */
+.bases-cards .bases-card {
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+}
+
+/* ---------------- Status chips ----------------
+   Trigger by adding to a note's frontmatter:
+     cssclasses: [chip-active]   (etc.)
+   or style status text in dashboards manually. */
+.chip-active  .inline-title::after,
+.status-active { color: #54B27A; }
+.status-wip,
+.status-idle    { color: #D9A441; }
+.status-blocked { color: #D9534F; }
+.status-done    { color: #6B7178; }
+
+/* Generic small uppercase mono chip you can apply in callouts */
+.chip {
+  font-family: var(--font-monospace-theme);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 1px 6px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 2px;
+  color: var(--text-muted);
+}
+
+/* Properties panel: compact editorial header */
+.metadata-container {
+  border-bottom: 1px solid var(--background-modifier-border);
+  padding-bottom: 8px;
+  margin-bottom: 12px;
+  font-size: 13px;
+}
+.metadata-property-key { color: var(--text-faint); }
+
+/* Callouts flattened to bordered blocks, no heavy tint */
+.callout {
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-m);
+  mix-blend-mode: normal;
+}
+
+/* Links: accent only on hover to keep the page calm */
+.markdown-rendered a.internal-link,
+.markdown-rendered a.external-link {
+  color: var(--text-normal);
+  text-decoration: none;
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+.markdown-rendered a.internal-link:hover,
+.markdown-rendered a.external-link:hover {
+  color: var(--text-accent);
+  border-bottom-color: var(--text-accent);
+}
+
+/* Focus ring is the accent */
+*:focus-visible {
+  outline: 2px solid var(--interactive-accent);
+  outline-offset: 1px;
+}

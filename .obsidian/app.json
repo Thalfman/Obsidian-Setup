@@ -1,0 +1,10 @@
+{
+  "alwaysUpdateLinks": true,
+  "newFileLocation": "folder",
+  "newFileFolderPath": "Sessions",
+  "attachmentFolderPath": "_meta/attachments",
+  "promptDelete": true,
+  "showLineNumber": true,
+  "readableLineLength": true,
+  "strictLineBreaks": false
+}

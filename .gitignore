@@ -1,11 +1,31 @@
-# Obsidian local state
+# ============================================================
+# DATA BOUNDARY — this remote is PUBLIC. Nothing below may push.
+# All Claude Code session data lands ONLY in these folders.
+# ============================================================
+/Sessions/
+/Projects/
+/Archive/
+_meta/sync-config.yaml
+_meta/sync-state.json
+
+# ------------------------------------------------------------
+# Obsidian: track config + snippet, never plugin/theme binaries
+# (public repo must not redistribute third-party plugin code,
+#  and plugin data.json holds absolute local paths).
+# ------------------------------------------------------------
+.obsidian/plugins/
+.obsidian/themes/
 .obsidian/workspace.json
 .obsidian/workspace-mobile.json
 .obsidian/workspace*
 .obsidian/cache
-.obsidian/plugins/*/data.json
 
 # Trash and OS cruft
 .trash/
 .DS_Store
 Thumbs.db
+
+# Python
+__pycache__/
+*.pyc
+.venv/

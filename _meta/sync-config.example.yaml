@@ -1,0 +1,34 @@
+# Mission Control — session sync config
+# Copy to sync-config.yaml (git-ignored) and edit. ALL keys are optional;
+# the defaults below are baked into sync.py, so the script runs with no config.
+# pyyaml is optional: if it is not installed, sync.py ignores this file and
+# uses its built-in defaults. (`pip install pyyaml` to enable this file.)
+
+# Where Claude Code stores sessions. ~ expands to your home dir.
+claude_dir: "~/.claude"
+
+# Vault root. "." = the repo root (folder containing scripts/). Relative paths
+# resolve against the repo root; an absolute path is used as-is.
+vault_dir: "."
+
+# A session is "active" if its .jsonl was modified within this many minutes.
+active_minutes: 30
+
+# Archive raw transcripts (gzipped) to /Archive before Claude Code prunes them.
+archive: false
+retention_days: 30
+
+# Optional: map a session folder's basename to a nicer display name.
+name_map:
+  motorola-pm-toolkit: "Motorola PM Toolkit"
+  Make-Ready-Poles-Claude: "Make-Ready Poles"
+  Build-Playbook: "Build Playbook"
+
+# Only include sessions whose cwd contains one of these substrings.
+# Empty list = include everything.
+allow: []
+
+# Exclude sessions whose cwd contains any of these substrings.
+deny:
+  - ".claude-mem"
+  - "observer-sessions"

@@ -1,0 +1,48 @@
+filters:
+  and:
+    - 'note.type == "session"'
+
+properties:
+  note.project:
+    displayName: Project
+  note.start:
+    displayName: Start
+  note.message_count:
+    displayName: Msgs
+  note.tools:
+    displayName: Tools
+  note.status:
+    displayName: Status
+  note.summary:
+    displayName: Summary
+
+views:
+  - type: table
+    name: Active
+    filters:
+      and:
+        - 'status == "active"'
+    order:
+      - note.project
+      - note.start
+      - note.message_count
+      - note.tools
+      - note.summary
+    sort:
+      - property: note.start
+        direction: DESC
+    limit: 50
+
+  - type: table
+    name: Recent
+    order:
+      - note.project
+      - note.start
+      - note.message_count
+      - note.tools
+      - note.status
+      - note.summary
+    sort:
+      - property: note.start
+        direction: DESC
+    limit: 100
