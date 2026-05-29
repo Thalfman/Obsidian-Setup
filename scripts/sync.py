@@ -306,18 +306,18 @@ def render_project_hub(project: str, path: str, status: str,
 def write_note(target: Path, content: str, dry: bool, state: dict, key: str,
                source_mtime: float | None = None) -> str:
     """Write content, preserving any existing `## Notes` tail. Returns action."""
-    preserved = None
-    if target.exists():
-        existing = target.read_text(encoding="utf-8")
-        preserved = split_preserved(existing)
-    if preserved is not None:
-        # content already ends with marker + blank lines; replace that tail.
-        head = content[: content.rfind("\n" + NOTES_MARKER) + 1]
-        content = head + preserved
-    digest = hashlib.sha256(content.encode("utf-8")).hexdigest()[:16]
+    # The machine-owned region is everything up to (and including) the marker.
+    # Hash only that, so edits below `## Notes` never trigger a rewrite.
+    head = content[: content.rfind("\n" + NOTES_MARKER) + 1]
+    digest = hashlib.sha256(head.encode("utf-8")).hexdigest()[:16]
     prior = state.get(key)
     if prior and prior.get("hash") == digest and prior.get("mtime") == source_mtime:
         return "skip"
+    # Preserve any existing user notes below the marker.
+    if target.exists():
+        preserved = split_preserved(target.read_text(encoding="utf-8"))
+        if preserved is not None:
+            content = head + preserved
     action = "update" if target.exists() else "create"
     if not dry:
         atomic_write(target, content)
@@ -347,12 +347,15 @@ def main() -> int:
     ap.add_argument("--config", type=Path, help="path to sync-config.yaml")
     ap.add_argument("--vault", type=Path, help="override vault root")
     ap.add_argument("--minutes", type=int, help="override active-window minutes")
+    ap.add_argument("--claude-dir", type=Path,
+                    help="override Claude Code data dir (default: config or ~/.claude)")
     args = ap.parse_args()
 
     script_dir = Path(__file__).resolve().parent
     cfg = load_config(args.config, script_dir)
 
-    claude_dir = Path(cfg["claude_dir"]).expanduser()
+    claude_dir = (args.claude_dir.expanduser() if args.claude_dir
+                  else Path(cfg["claude_dir"]).expanduser())
     repo_root = script_dir.parent
     if args.vault:
         vault = args.vault.expanduser().resolve()

@@ -1,0 +1,12 @@
+#!/bin/sh
+# Data-boundary guard. The remote is PUBLIC; these paths hold local-only
+# Claude Code session data and must never be committed. Enable once with:
+#   git config core.hooksPath .githooks
+blocked=$(git diff --cached --name-only | grep -E '^(Sessions/|Projects/|Archive/|_meta/sync-config\.yaml|_meta/sync-state\.json)')
+if [ -n "$blocked" ]; then
+  echo "pre-commit BLOCKED: local-only session data staged for a public remote:" >&2
+  echo "$blocked" | sed 's/^/  /' >&2
+  echo "These are git-ignored by design. Unstage them: git restore --staged <path>" >&2
+  exit 1
+fi
+exit 0
