@@ -6,7 +6,9 @@ No network, no real Claude history touched. Run: pytest tests/
 
 from __future__ import annotations
 
+import gzip
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -251,6 +253,112 @@ def test_allow_scope_excludes_other_paths(tmp_path):
 
     _run(vault, claude, "--config", str(cfg))
     assert list((vault / "Sessions").glob("*.md")) == []
+
+
+# --------------------------------------------------------------------------- #
+# archival + retention (packet 05)
+# --------------------------------------------------------------------------- #
+def test_archive_transcript_creates_gz_and_roundtrips(tmp_path):
+    src = tmp_path / "uuid1234.jsonl"
+    src.write_text('{"hello": "world"}\n', encoding="utf-8")
+    vault = tmp_path / "vault"
+    assert sync.archive_transcript(src, "myproj", vault, dry=False) is True
+    dest = vault / "Archive" / "myproj" / "uuid1234.jsonl.gz"
+    assert dest.exists()
+    with gzip.open(dest, "rt", encoding="utf-8") as fh:
+        assert fh.read() == '{"hello": "world"}\n'
+
+
+def test_archive_transcript_noop_when_unchanged(tmp_path):
+    src = tmp_path / "u.jsonl"
+    src.write_text("x", encoding="utf-8")
+    vault = tmp_path / "vault"
+    assert sync.archive_transcript(src, "p", vault, dry=False) is True
+    dest = vault / "Archive" / "p" / "u.jsonl.gz"
+    # pin the archive newer than the source so the mtime guard sees it current
+    os.utime(src, (100.0, 100.0))
+    os.utime(dest, (200.0, 200.0))
+    assert sync.archive_transcript(src, "p", vault, dry=False) is False
+
+
+def test_archive_transcript_rearchives_when_source_newer(tmp_path):
+    src = tmp_path / "u.jsonl"
+    src.write_text("x", encoding="utf-8")
+    vault = tmp_path / "vault"
+    sync.archive_transcript(src, "p", vault, dry=False)
+    dest = vault / "Archive" / "p" / "u.jsonl.gz"
+    os.utime(dest, (200.0, 200.0))
+    os.utime(src, (300.0, 300.0))  # source edited after the archive was written
+    assert sync.archive_transcript(src, "p", vault, dry=False) is True
+
+
+def test_archive_transcript_dry_run_writes_nothing(tmp_path):
+    src = tmp_path / "u.jsonl"
+    src.write_text("x", encoding="utf-8")
+    vault = tmp_path / "vault"
+    assert sync.archive_transcript(src, "p", vault, dry=True) is True
+    assert not (vault / "Archive").exists()
+
+
+def test_end_to_end_archive_writes_gz(tmp_path, fake_claude):
+    vault = tmp_path / "vault"
+    vault.mkdir()
+    uuid = "abcd1234-0000-0000-0000-000000000000"
+    claude = fake_claude(str(vault), uuid)
+    try:
+        import yaml  # noqa: F401
+    except ImportError:
+        pytest.skip("pyyaml not installed; cannot neutralize repo config in subprocess")
+    _run(vault, claude, "--config", str(_empty_config(tmp_path)),
+         "--since", "2026-01-01", "--archive")
+    gz = list((vault / "Archive").glob("**/*.jsonl.gz"))
+    assert len(gz) == 1
+    assert gz[0].name == f"{uuid}.jsonl.gz"
+
+
+def test_prune_archive_removes_old_keeps_recent(tmp_path):
+    vault = tmp_path / "vault"
+    arch = vault / "Archive" / "proj"
+    arch.mkdir(parents=True)
+    old = arch / "old.jsonl.gz"
+    old.write_bytes(b"old")
+    recent = arch / "recent.jsonl.gz"
+    recent.write_bytes(b"new")
+    now = 1_000_000_000.0
+    day = 86400
+    os.utime(old, (now - 40 * day, now - 40 * day))
+    os.utime(recent, (now - 5 * day, now - 5 * day))
+    pruned = sync.prune_archive(vault, retention_days=30, now=now, dry=False)
+    assert pruned == 1
+    assert not old.exists()
+    assert recent.exists()
+
+
+def test_prune_archive_dry_run_keeps_files(tmp_path):
+    vault = tmp_path / "vault"
+    arch = vault / "Archive" / "proj"
+    arch.mkdir(parents=True)
+    old = arch / "old.jsonl.gz"
+    old.write_bytes(b"old")
+    os.utime(old, (1_000_000_000.0 - 99 * 86400,) * 2)
+    assert sync.prune_archive(vault, retention_days=30, now=1_000_000_000.0, dry=True) == 1
+    assert old.exists()  # reported but not deleted
+
+
+def test_prune_archive_disabled_when_retention_nonpositive(tmp_path):
+    vault = tmp_path / "vault"
+    arch = vault / "Archive" / "proj"
+    arch.mkdir(parents=True)
+    old = arch / "old.jsonl.gz"
+    old.write_bytes(b"old")
+    os.utime(old, (0.0, 0.0))  # ancient
+    assert sync.prune_archive(vault, retention_days=0, now=1_000_000_000.0, dry=False) == 0
+    assert old.exists()
+
+
+def test_prune_archive_missing_dir_is_safe(tmp_path):
+    vault = tmp_path / "vault"  # no Archive directory at all
+    assert sync.prune_archive(vault, retention_days=30, now=1.0, dry=False) == 0
 
 
 if __name__ == "__main__":

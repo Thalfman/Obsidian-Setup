@@ -357,6 +357,26 @@ def archive_transcript(src: Path, project_slug: str, vault: Path, dry: bool) -> 
     return True
 
 
+def prune_archive(vault: Path, retention_days: int, now: float, dry: bool) -> int:
+    """Delete gzipped archives older than `retention_days`. Return the count.
+
+    Only ever touches files under `vault/Archive` — never the read-only
+    `~/.claude`. retention_days <= 0 disables pruning (returns 0), so the
+    feature is strictly opt-in and a misconfigured 0 can't wipe archives.
+    """
+    archive_root = vault / "Archive"
+    if retention_days <= 0 or not archive_root.is_dir():
+        return 0
+    cutoff = now - retention_days * 86400
+    pruned = 0
+    for gz in archive_root.glob("**/*.jsonl.gz"):
+        if gz.is_file() and gz.stat().st_mtime < cutoff:
+            if not dry:
+                gz.unlink()
+            pruned += 1
+    return pruned
+
+
 # --------------------------------------------------------------------------- #
 # main
 # --------------------------------------------------------------------------- #
@@ -365,6 +385,8 @@ def main() -> int:
     ap.add_argument("--dry-run", action="store_true", help="print actions, write nothing")
     ap.add_argument("--since", metavar="WHEN", help="only sessions starting on/after this ISO date or datetime (overrides config)")
     ap.add_argument("--archive", action="store_true", help="gzip raw transcripts into /Archive")
+    ap.add_argument("--prune-archive", action="store_true",
+                    help="delete archives older than retention_days (config); honors --dry-run")
     ap.add_argument("--config", type=Path, help="path to sync-config.yaml")
     ap.add_argument("--vault", type=Path, help="override vault root")
     ap.add_argument("--minutes", type=int, help="override active-window minutes")
@@ -457,12 +479,17 @@ def main() -> int:
         if action != "skip":
             counts[action] = counts.get(action, 0) + 1
 
+    pruned = 0
+    if args.prune_archive:
+        pruned = prune_archive(vault, int(cfg["retention_days"]), now, args.dry_run)
+
     if not args.dry_run:
         atomic_write(state_path, json.dumps(state, indent=2))
 
     tag = "[dry-run] " if args.dry_run else ""
     print(f"{tag}sessions+hubs  created={counts['create']} updated={counts['update']} "
-          f"skipped={counts['skip']} excluded={counts['excluded']} archived={counts['archived']}")
+          f"skipped={counts['skip']} excluded={counts['excluded']} archived={counts['archived']} "
+          f"pruned={pruned}")
     print(f"{tag}projects: {len(projects)}  vault: {vault}")
     return 0
 
