@@ -110,6 +110,18 @@ def test_parse_session_tokens_zero_when_no_usage(tmp_path):
 
 
 # --------------------------------------------------------------------------- #
+# liveness (packet 06)
+# --------------------------------------------------------------------------- #
+def test_liveness_three_tiers_and_boundaries():
+    am, factor, now, minute = 30, 4, 1_000_000.0, 60
+    assert sync.liveness(now, now - 5 * minute, am, factor) == "active"
+    assert sync.liveness(now, now - am * minute, am, factor) == "active"  # boundary, inclusive
+    assert sync.liveness(now, now - 90 * minute, am, factor) == "idle"  # within 30*4=120 min
+    assert sync.liveness(now, now - am * factor * minute, am, factor) == "idle"  # boundary
+    assert sync.liveness(now, now - 200 * minute, am, factor) == "done"  # beyond 120 min
+
+
+# --------------------------------------------------------------------------- #
 # scoping — the rule that keeps existing repos out of the board
 # --------------------------------------------------------------------------- #
 def test_included_deny_takes_precedence():
@@ -156,6 +168,19 @@ def test_write_note_idempotent_and_preserves_user_notes(tmp_path):
     a3 = sync.write_note(target, content, dry=False, state=state, key="k", source_mtime=2.0)
     assert a3 == "update"
     assert "my private note" in target.read_text(encoding="utf-8")
+
+
+def test_last_synced_change_alone_does_not_force_rewrite(tmp_path):
+    target = tmp_path / "Sessions" / "n.md"
+    state: dict = {}
+    c1 = '---\ntype: session\nlast_synced: "2026-01-01T00:00"\n---\nbody\n\n## Notes\n\n'
+    assert sync.write_note(target, c1, dry=False, state=state, key="k", source_mtime=1.0) == "create"
+    # only last_synced differs, same source mtime -> still skip (idempotent)
+    c2 = '---\ntype: session\nlast_synced: "2099-12-31T23:59"\n---\nbody\n\n## Notes\n\n'
+    assert sync.write_note(target, c2, dry=False, state=state, key="k", source_mtime=1.0) == "skip"
+    # a real content change (status flip) with the same mtime -> update
+    c3 = '---\ntype: session\nstatus: done\nlast_synced: "2099-12-31T23:59"\n---\nbody\n\n## Notes\n\n'
+    assert sync.write_note(target, c3, dry=False, state=state, key="k", source_mtime=1.0) == "update"
 
 
 # --------------------------------------------------------------------------- #
@@ -221,6 +246,10 @@ def test_end_to_end_indexes_one_session(tmp_path):
     assert 'model: "claude-opus-4-8"' in fm
     assert "tokens: 650" in fm  # 100 + 50 + 200 + 300, unquoted integer
     assert "## Notes" in fm
+
+    # last_synced is stamped at render time and must be parseable (packet 06)
+    synced = next(l for l in fm.splitlines() if l.startswith("last_synced:"))
+    assert sync.parse_ts(synced.split(":", 1)[1].strip().strip('"')) is not None
 
 
 def test_since_floor_excludes_older_sessions(tmp_path):

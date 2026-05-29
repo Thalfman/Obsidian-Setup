@@ -53,6 +53,10 @@ DEFAULTS = {
     # resolved against the repo root; absolute paths are used as-is.
     "vault_dir": ".",
     "active_minutes": 30,
+    # A session reads "idle" until its mtime is older than active_minutes *
+    # idle_factor, then "done". Three-tier liveness so a stalled-open session
+    # stops masquerading as active.
+    "idle_factor": 4,
     "archive": False,
     "retention_days": 30,
     "name_map": {},
@@ -161,6 +165,21 @@ def token_sum(usage) -> int:
     return total
 
 
+def liveness(now: float, mtime: float, active_minutes: int, idle_factor: int) -> str:
+    """Three-tier freshness from a transcript's mtime (all epoch seconds).
+
+    "active" within active_minutes; "idle" within active_minutes * idle_factor;
+    "done" beyond that. Both thresholds are inclusive. A stalled-but-open
+    session ages out of "active" instead of reading live forever.
+    """
+    age = now - mtime
+    if age <= active_minutes * 60:
+        return "active"
+    if age <= active_minutes * 60 * idle_factor:
+        return "idle"
+    return "done"
+
+
 # --------------------------------------------------------------------------- #
 # history index (first prompt per session, for local summaries)
 # --------------------------------------------------------------------------- #
@@ -260,7 +279,8 @@ def included(cwd: str, allow: list, deny: list) -> bool:
 # --------------------------------------------------------------------------- #
 # note rendering
 # --------------------------------------------------------------------------- #
-def render_session_note(s: dict, project: str, summary: str, status: str) -> str:
+def render_session_note(s: dict, project: str, summary: str, status: str,
+                        last_synced: str) -> str:
     fm = [
         "---",
         "type: session",
@@ -277,6 +297,7 @@ def render_session_note(s: dict, project: str, summary: str, status: str) -> str
         f"cc_version: {yq(s['cc_version'])}",
         f"model: {yq(s['model'])}",
         f"tokens: {s['tokens']}",
+        f"last_synced: {yq(last_synced)}",
         "source: auto",
         "---",
     ]
@@ -330,7 +351,10 @@ def write_note(target: Path, content: str, dry: bool, state: dict, key: str,
     # The machine-owned region is everything up to (and including) the marker.
     # Hash only that, so edits below `## Notes` never trigger a rewrite.
     head = content[: content.rfind("\n" + NOTES_MARKER) + 1]
-    digest = hashlib.sha256(head.encode("utf-8")).hexdigest()[:16]
+    # last_synced is stamped fresh on every render; exclude it from the change
+    # hash so a note whose real content is unchanged still skips (idempotency).
+    hashable = re.sub(r"(?m)^last_synced: .*\n", "", head)
+    digest = hashlib.sha256(hashable.encode("utf-8")).hexdigest()[:16]
     prior = state.get(key)
     if prior and prior.get("hash") == digest and prior.get("mtime") == source_mtime:
         return "skip"
@@ -406,6 +430,7 @@ def main() -> int:
         vraw = Path(str(cfg["vault_dir"])).expanduser()
         vault = vraw.resolve() if vraw.is_absolute() else (repo_root / vraw).resolve()
     active_minutes = args.minutes if args.minutes is not None else int(cfg["active_minutes"])
+    idle_factor = int(cfg["idle_factor"])
     do_archive = args.archive or bool(cfg["archive"])
     name_map = dict(cfg.get("name_map") or {})
     allow = list(cfg.get("allow") or [])
@@ -426,6 +451,7 @@ def main() -> int:
 
     history = build_history_index(claude_dir)
     now = datetime.now(timezone.utc).timestamp()
+    synced_at = datetime.fromtimestamp(now, timezone.utc).strftime("%Y-%m-%dT%H:%M")
 
     session_files = sorted(claude_dir.glob("projects/*/*.jsonl"))
     counts = {"create": 0, "update": 0, "skip": 0, "archived": 0, "excluded": 0}
@@ -443,13 +469,13 @@ def main() -> int:
 
         proj = project_name(s["path"], fallback=sf.parent.name, name_map=name_map)
         proj_slug = slugify(proj)
-        status = "active" if (now - s["source_mtime"]) <= active_minutes * 60 else "done"
+        status = liveness(now, s["source_mtime"], active_minutes, idle_factor)
         summary = sanitize_summary(history.get(s["session_id"], ""))
 
         fname = f"{s['start'][:10]}-{proj_slug}-{s['session_id'][:8]}.md"
         target = vault / "Sessions" / fname
         action = write_note(
-            target, render_session_note(s, proj, summary, status),
+            target, render_session_note(s, proj, summary, status, synced_at),
             args.dry_run, state, key=f"session:{s['session_id']}",
             source_mtime=s["source_mtime"],
         )
