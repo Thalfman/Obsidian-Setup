@@ -20,6 +20,9 @@ _meta/sync-state.json
 .obsidian/workspace*
 .obsidian/cache
 
+# Claude Code harness artifacts (not part of the vault)
+.claude/
+
 # Trash and OS cruft
 .trash/
 .DS_Store
