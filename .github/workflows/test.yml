@@ -1,0 +1,24 @@
+name: tests
+
+# Runs the sync.py suite on every push and PR. The repo is PUBLIC: the suite
+# uses only synthetic tmp dirs (see tests/conftest.py), never the real
+# ~/.claude, so no local session data is ever read, echoed, or uploaded.
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install dev dependencies
+        run: pip install -r requirements-dev.txt
+      - name: Run tests
+        run: python -m pytest tests/ -q
