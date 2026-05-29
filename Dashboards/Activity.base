@@ -1,0 +1,57 @@
+filters:
+  and:
+    - 'note.type == "session"'
+
+properties:
+  note.project:
+    displayName: Project
+  note.model:
+    displayName: Model
+  note.start:
+    displayName: Start
+  note.message_count:
+    displayName: Msgs
+  note.tokens:
+    displayName: Tokens
+  note.status:
+    displayName: Status
+
+views:
+  - type: table
+    name: By project
+    groupBy:
+      property: note.project
+      direction: ASC
+    order:
+      - note.project
+      - note.start
+      - note.message_count
+      - note.tokens
+      - note.status
+    sort:
+      - property: note.start
+        direction: DESC
+    summaries:
+      note.message_count: Sum
+      note.tokens: Sum
+    limit: 200
+
+  - type: table
+    name: By model
+    groupBy:
+      property: note.model
+      direction: ASC
+    order:
+      - note.model
+      - note.project
+      - note.start
+      - note.message_count
+      - note.tokens
+      - note.status
+    sort:
+      - property: note.start
+        direction: DESC
+    summaries:
+      note.message_count: Sum
+      note.tokens: Sum
+    limit: 200
