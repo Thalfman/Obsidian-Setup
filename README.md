@@ -8,6 +8,13 @@ This repo is **public and apparatus-only**. It contains the *system* (skeleton,
 templates, dashboards, CSS, the sync script) and never the data. All session
 content is generated locally into git-ignored folders and stays on disk.
 
+**The board starts empty and only shows sessions you start from this vault.**
+You run `claude` from a terminal inside the vault; Claude Code records it under
+`~/.claude`; the sync script copies just those sessions in. Existing work in your
+other repos never appears, because `sync-config.yaml` scopes the sync to this
+vault's path and to sessions starting after a setup timestamp. See "Sync script"
+below.
+
 ## What's tracked vs local
 
 | Tracked (public) | Local only (git-ignored) |
@@ -58,7 +65,21 @@ python scripts/sync.py [--dry-run] [--since YYYY-MM-DD] [--archive]
 Read-only over `~/.claude`. Writes one note per session to `Sessions/`, one hub
 per repo to `Projects/`, optional gzipped transcripts to `Archive/`. Idempotent
 (only changed sessions rewrite; the `## Notes` section is always preserved).
-stdlib only; `pyyaml` optional (enables `sync-config.yaml`).
+stdlib only; `pyyaml` optional but recommended here (it's what reads the scoping
+config).
+
+### Scope it to this vault, starting empty (recommended)
+
+Copy `_meta/sync-config.example.yaml` to `_meta/sync-config.yaml` (git-ignored),
+then set two keys so only sessions you start from this vault, from now on, appear:
+
+- `allow:` the vault's absolute path, e.g. `'C:\Users\thalf\Desktop\Obsidian'`.
+  Only sessions whose working directory matches show up.
+- `since:` the current UTC moment, so existing and setup sessions stay hidden.
+  Get it with `(Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm")`.
+
+Install pyyaml so the config is honored: `pip install pyyaml`. Then
+`python scripts/sync.py` produces zero notes until your next session here.
 
 ### Schedule it (near-live console)
 

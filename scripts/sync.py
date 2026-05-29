@@ -58,6 +58,9 @@ DEFAULTS = {
     "name_map": {},
     "allow": [],
     "deny": [".claude-mem", "observer-sessions"],
+    # Only index sessions that START on/after this ISO date or datetime
+    # (e.g. "2026-05-30" or "2026-05-30T09:00"). None = no floor.
+    "since": None,
 }
 
 
@@ -339,7 +342,7 @@ def archive_transcript(src: Path, project_slug: str, vault: Path, dry: bool) -> 
 def main() -> int:
     ap = argparse.ArgumentParser(description="Mission Control session sync (read-only).")
     ap.add_argument("--dry-run", action="store_true", help="print actions, write nothing")
-    ap.add_argument("--since", metavar="YYYY-MM-DD", help="only sessions ending on/after this date")
+    ap.add_argument("--since", metavar="WHEN", help="only sessions starting on/after this ISO date or datetime (overrides config)")
     ap.add_argument("--archive", action="store_true", help="gzip raw transcripts into /Archive")
     ap.add_argument("--config", type=Path, help="path to sync-config.yaml")
     ap.add_argument("--vault", type=Path, help="override vault root")
@@ -361,6 +364,7 @@ def main() -> int:
     name_map = dict(cfg.get("name_map") or {})
     allow = list(cfg.get("allow") or [])
     deny = list(cfg.get("deny") or [])
+    since = args.since or (str(cfg["since"]) if cfg.get("since") else None)
 
     if not claude_dir.exists():
         print(f"error: claude_dir not found: {claude_dir}", file=sys.stderr)
@@ -388,7 +392,7 @@ def main() -> int:
         if not included(s["path"], allow, deny):
             counts["excluded"] += 1
             continue
-        if args.since and s["end"][:10] < args.since:
+        if since and s["start"] < since:
             continue
 
         proj = project_name(s["path"], fallback=sf.parent.name, name_map=name_map)

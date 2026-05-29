@@ -1,34 +1,39 @@
 # Mission Control — session sync config
-# Copy to sync-config.yaml (git-ignored) and edit. ALL keys are optional;
-# the defaults below are baked into sync.py, so the script runs with no config.
-# pyyaml is optional: if it is not installed, sync.py ignores this file and
-# uses its built-in defaults. (`pip install pyyaml` to enable this file.)
+# Copy to sync-config.yaml (git-ignored) and edit. pyyaml is optional: if it is
+# not installed, sync.py ignores this file and uses built-in defaults
+# (`pip install pyyaml` to enable it).
+#
+# RECOMMENDED SETUP: scope the board to THIS vault only, starting empty.
+# The board then shows only sessions you start by running `claude` from inside
+# the vault, from `since` onward. Your other repos never appear.
 
 # Where Claude Code stores sessions. ~ expands to your home dir.
 claude_dir: "~/.claude"
 
-# Vault root. "." = the repo root (folder containing scripts/). Relative paths
-# resolve against the repo root; an absolute path is used as-is.
+# Vault root. "." = the repo root (folder containing scripts/).
 vault_dir: "."
+
+# Only index sessions whose working directory contains one of these strings.
+# Set this to the vault's own path so ONLY sessions started from here show up.
+allow:
+  - 'Desktop\Obsidian'
+
+# Only index sessions that START on/after this moment. Set it to "now" at setup
+# so existing and setup sessions stay hidden and the board grows only from your
+# next real session. IMPORTANT: ~/.claude timestamps are UTC, so write this in
+# UTC, not local time. Format: "YYYY-MM-DD[THH:mm]".
+# PowerShell to get UTC now:  (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm")
+since: "2026-05-30T00:00"
 
 # A session is "active" if its .jsonl was modified within this many minutes.
 active_minutes: 30
 
-# Archive raw transcripts (gzipped) to /Archive before Claude Code prunes them.
+# Archive raw transcripts (gzipped) before Claude Code prunes them.
 archive: false
 retention_days: 30
 
-# Optional: map a session folder's basename to a nicer display name.
-name_map:
-  motorola-pm-toolkit: "Motorola PM Toolkit"
-  Make-Ready-Poles-Claude: "Make-Ready Poles"
-  Build-Playbook: "Build Playbook"
+# Optional: prettier display names per folder basename.
+name_map: {}
 
-# Only include sessions whose cwd contains one of these substrings.
-# Empty list = include everything.
-allow: []
-
-# Exclude sessions whose cwd contains any of these substrings.
-deny:
-  - ".claude-mem"
-  - "observer-sessions"
+# With a tight `allow` above, a denylist is usually unnecessary.
+deny: []
