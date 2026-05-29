@@ -53,9 +53,9 @@ DEFAULTS = {
     # resolved against the repo root; absolute paths are used as-is.
     "vault_dir": ".",
     "active_minutes": 30,
-    # A session reads "idle" until its mtime is older than active_minutes *
-    # idle_factor, then "done". Three-tier liveness so a stalled-open session
-    # stops masquerading as active.
+    # Liveness tiers from a transcript's mtime: "active" within active_minutes,
+    # "idle" until active_minutes * idle_factor, "done" beyond. Three tiers so a
+    # stalled-but-open session stops masquerading as active.
     "idle_factor": 4,
     "archive": False,
     "retention_days": 30,
@@ -391,10 +391,21 @@ def prune_archive(vault: Path, retention_days: int, now: float, dry: bool) -> in
     archive_root = vault / "Archive"
     if retention_days <= 0 or not archive_root.is_dir():
         return 0
+    root = archive_root.resolve()
     cutoff = now - retention_days * 86400
     pruned = 0
     for gz in archive_root.glob("**/*.jsonl.gz"):
-        if gz.is_file() and gz.stat().st_mtime < cutoff:
+        if not gz.is_file():
+            continue
+        # Never unlink a path that resolves outside Archive (e.g. via a symlink
+        # or junction planted in the tree). Keeps the read-only boundary on
+        # ~/.claude literally true, not merely true for ordinary trees.
+        try:
+            if not gz.resolve().is_relative_to(root):
+                continue
+        except OSError:
+            continue
+        if gz.stat().st_mtime < cutoff:
             if not dry:
                 gz.unlink()
             pruned += 1

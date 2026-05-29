@@ -390,5 +390,48 @@ def test_prune_archive_missing_dir_is_safe(tmp_path):
     assert sync.prune_archive(vault, retention_days=30, now=1.0, dry=False) == 0
 
 
+def test_prune_archive_never_deletes_outside_via_symlinked_dir(tmp_path):
+    # A planted symlink/junction must not let prune reach files outside Archive.
+    vault = tmp_path / "vault"
+    arch = vault / "Archive"
+    arch.mkdir(parents=True)
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    victim = outside / "victim.jsonl.gz"
+    victim.write_bytes(b"keepme")
+    os.utime(victim, (0.0, 0.0))  # ancient -> would be pruned if it were reached
+    try:
+        os.symlink(outside, arch / "linked", target_is_directory=True)
+    except (OSError, NotImplementedError):
+        pytest.skip("cannot create a directory symlink on this platform/run")
+    sync.prune_archive(vault, retention_days=30, now=1_000_000_000.0, dry=False)
+    assert victim.exists()  # a file outside Archive must never be unlinked
+
+
+# --------------------------------------------------------------------------- #
+# cross-process idempotency: state written on run 1 drives a skip on run 2
+# --------------------------------------------------------------------------- #
+def test_end_to_end_second_run_skips_unchanged(tmp_path, fake_claude):
+    vault = tmp_path / "vault"
+    vault.mkdir()
+    claude = fake_claude(str(vault), "abcd1234-0000-0000-0000-000000000000")
+    try:
+        import yaml  # noqa: F401
+    except ImportError:
+        pytest.skip("pyyaml not installed; cannot neutralize repo config in subprocess")
+    cfg = _empty_config(tmp_path)
+
+    r1 = _run(vault, claude, "--config", str(cfg), "--since", "2026-01-01")
+    assert "created=2" in r1.stdout  # one session note + one project hub
+    assert (vault / "_meta" / "sync-state.json").exists()  # state persisted
+    note = next((vault / "Sessions").glob("*.md"))
+    mtime1 = note.stat().st_mtime
+
+    # nothing in ~/.claude changed -> the note must be skipped, not rewritten
+    r2 = _run(vault, claude, "--config", str(cfg), "--since", "2026-01-01")
+    assert "created=0 updated=0 skipped=1" in r2.stdout
+    assert note.stat().st_mtime == mtime1  # file untouched on the second run
+
+
 if __name__ == "__main__":
     raise SystemExit(pytest.main([__file__, "-q"]))
