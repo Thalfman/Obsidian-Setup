@@ -1,8 +1,58 @@
+/* @settings
+
+name: Mission Control
+id: mission-control
+settings:
+    -
+        id: mc-accent
+        title: Accent color
+        description: The single signal accent used across the console. Drives --interactive-accent and --text-accent.
+        type: variable-color
+        format: hex
+        opacity: false
+        default: '#FF5A1F'
+    -
+        id: font-text-size
+        title: Base font size
+        description: Body text size.
+        type: variable-number
+        format: px
+        default: 16
+    -
+        id: mc-row-pad
+        title: Data row padding
+        description: Vertical padding on Bases table rows.
+        type: variable-number
+        format: px
+        default: 6
+    -
+        id: line-height-normal
+        title: Density
+        description: Line height for body text (compact / normal / relaxed).
+        type: variable-select
+        default: '1.6'
+        options:
+            -
+                label: Compact
+                value: '1.3'
+            -
+                label: Normal
+                value: '1.6'
+            -
+                label: Relaxed
+                value: '1.9'
+
+*/
+
 /* ============================================================
    Mission Control — Swiss / Bauhaus dark console
    Single signal-orange accent. Monospace for code + IDs.
    Theme-agnostic: overrides Obsidian core variables, so it
    works with or without the Minimal theme.
+
+   Style Settings (above) exposes accent, font size, row padding,
+   and density. Every default below matches the @settings defaults,
+   so nothing changes until the user toggles a control.
    ============================================================ */
 
 .theme-dark {
@@ -15,7 +65,7 @@
   --background-modifier-active-hover: #1C1F23;
   --background-modifier-border:        #262A2F;
   --background-modifier-border-hover:  #2E343A;
-  --background-modifier-border-focus:  #FF5A1F;
+  --background-modifier-border-focus:  var(--mc-accent);
 
   /* --- text --- */
   --text-normal:  #E8E9EB;
@@ -23,13 +73,17 @@
   --text-faint:   #6B7178;
   --text-on-accent: #0D0E10;
 
-  /* --- accent: the only loud color --- */
-  --interactive-accent:        #FF5A1F;
+  /* --- accent: the only loud color ---
+     --mc-accent is the single source (Style Settings color picker writes it);
+     every accent variable derives from it. The -hover/-2 shades stay a fixed
+     darker tone so a recolored accent still reads as one family. */
+  --mc-accent:                 #FF5A1F;
+  --interactive-accent:        var(--mc-accent);
   --interactive-accent-hover:  #E14E16;
-  --text-accent:               #FF5A1F;
+  --text-accent:               var(--mc-accent);
   --text-accent-hover:         #E14E16;
-  --color-accent:              #FF5A1F;
-  --color-accent-1:            #FF5A1F;
+  --color-accent:              var(--mc-accent);
+  --color-accent-1:            var(--mc-accent);
   --color-accent-2:            #E14E16;
 
   /* --- type --- */
@@ -47,6 +101,7 @@
   --radius-l: 4px;
   --file-line-width: 720px;
   --hr-color: var(--background-modifier-border);
+  --mc-row-pad: 6px;  /* Bases data-row vertical padding; Style Settings number */
 }
 
 /* Headings: tight, editorial, left-aligned */
@@ -110,8 +165,8 @@ hr,
 .bases-table th,
 .bases-td {
   border-color: var(--background-modifier-border);
-  padding-top: 6px;
-  padding-bottom: 6px;
+  padding-top: var(--mc-row-pad);
+  padding-bottom: var(--mc-row-pad);
 }
 
 .bases-table tbody tr:hover,
