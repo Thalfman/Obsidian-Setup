@@ -144,6 +144,23 @@ def split_preserved(text: str) -> str | None:
     return text[idx + 1 :]
 
 
+def token_sum(usage) -> int:
+    """Total tokens for one assistant record's `message.usage` dict.
+
+    Sums prompt, completion, and both cache token counts; any missing or
+    non-integer sub-key defaults to 0. A missing/non-dict `usage` yields 0.
+    """
+    if not isinstance(usage, dict):
+        return 0
+    total = 0
+    for key in ("input_tokens", "output_tokens",
+                "cache_read_input_tokens", "cache_creation_input_tokens"):
+        value = usage.get(key, 0)
+        if isinstance(value, (int, float)):
+            total += int(value)
+    return total
+
+
 # --------------------------------------------------------------------------- #
 # history index (first prompt per session, for local summaries)
 # --------------------------------------------------------------------------- #
@@ -175,6 +192,7 @@ def parse_session(path: Path) -> dict | None:
     timestamps: list[str] = []
     tools: set[str] = set()
     msg_count = 0
+    tokens = 0
 
     for rec in iter_jsonl(path):
         if rec.get("sessionId"):
@@ -197,6 +215,7 @@ def parse_session(path: Path) -> dict | None:
         if isinstance(msg, dict):
             if not model and msg.get("model"):
                 model = msg["model"]
+            tokens += token_sum(msg.get("usage"))
             content = msg.get("content")
             if isinstance(content, list):
                 for block in content:
@@ -214,6 +233,7 @@ def parse_session(path: Path) -> dict | None:
         "start": timestamps[0],
         "end": timestamps[-1],
         "message_count": msg_count,
+        "tokens": tokens,
         "tools": sorted(tools),
         "branch": branch,
         "cc_version": version,
@@ -256,6 +276,7 @@ def render_session_note(s: dict, project: str, summary: str, status: str) -> str
         f"branch: {yq(s['branch'])}",
         f"cc_version: {yq(s['cc_version'])}",
         f"model: {yq(s['model'])}",
+        f"tokens: {s['tokens']}",
         "source: auto",
         "---",
     ]

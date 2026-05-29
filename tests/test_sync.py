@@ -56,6 +56,58 @@ def test_parse_ts_normalizes_to_utc_minutes():
 
 
 # --------------------------------------------------------------------------- #
+# token accounting (packet 04)
+# --------------------------------------------------------------------------- #
+def _write_session(tmp_path: Path, records: list) -> Path:
+    p = tmp_path / "session.jsonl"
+    p.write_text("\n".join(json.dumps(r) for r in records), encoding="utf-8")
+    return p
+
+
+def test_token_sum_defaults_missing_and_ignores_non_dict():
+    full = {"input_tokens": 6, "output_tokens": 151,
+            "cache_read_input_tokens": 0, "cache_creation_input_tokens": 48257}
+    assert sync.token_sum(full) == 48414
+    assert sync.token_sum({"input_tokens": 5}) == 5  # absent keys default to 0
+    assert sync.token_sum({"input_tokens": 5, "output_tokens": None}) == 5  # None -> 0
+    assert sync.token_sum(None) == 0
+    assert sync.token_sum({}) == 0
+
+
+def test_parse_session_sums_usage_across_assistant_records(tmp_path):
+    records = [
+        {"type": "user", "sessionId": "s1", "cwd": "C:\\x",
+         "timestamp": "2026-06-01T10:00:00.000Z",
+         "message": {"role": "user", "content": "hi"}},
+        {"type": "assistant", "sessionId": "s1", "timestamp": "2026-06-01T10:01:00.000Z",
+         "message": {"role": "assistant", "model": "claude-opus-4-8",
+                     "usage": {"input_tokens": 10, "output_tokens": 20,
+                               "cache_read_input_tokens": 5,
+                               "cache_creation_input_tokens": 3}}},
+        {"type": "assistant", "sessionId": "s1", "timestamp": "2026-06-01T10:02:00.000Z",
+         "message": {"role": "assistant",
+                     "usage": {"input_tokens": 100, "output_tokens": 200}}},  # cache keys absent
+    ]
+    s = sync.parse_session(_write_session(tmp_path, records))
+    assert s is not None
+    assert s["tokens"] == 338  # (10+20+5+3) + (100+200+0+0)
+
+
+def test_parse_session_tokens_zero_when_no_usage(tmp_path):
+    records = [
+        {"type": "user", "sessionId": "s2", "cwd": "C:\\x",
+         "timestamp": "2026-06-01T10:00:00.000Z",
+         "message": {"role": "user", "content": "hi"}},
+        {"type": "assistant", "sessionId": "s2", "timestamp": "2026-06-01T10:01:00.000Z",
+         "message": {"role": "assistant",
+                     "content": [{"type": "text", "text": "no usage here"}]}},
+    ]
+    s = sync.parse_session(_write_session(tmp_path, records))
+    assert s is not None
+    assert s["tokens"] == 0
+
+
+# --------------------------------------------------------------------------- #
 # scoping — the rule that keeps existing repos out of the board
 # --------------------------------------------------------------------------- #
 def test_included_deny_takes_precedence():
@@ -116,6 +168,9 @@ def _make_fake_claude(root: Path, vault_path: str, uuid: str) -> Path:
          "message": {"role": "user", "content": "hi"}},
         {"type": "assistant", "sessionId": uuid, "timestamp": "2026-06-01T10:01:00.000Z",
          "message": {"role": "assistant", "model": "claude-opus-4-8",
+                     "usage": {"input_tokens": 100, "output_tokens": 50,
+                               "cache_read_input_tokens": 200,
+                               "cache_creation_input_tokens": 300},
                      "content": [{"type": "tool_use", "name": "Bash"}]}},
     ]
     (proj / f"{uuid}.jsonl").write_text(
@@ -162,6 +217,7 @@ def test_end_to_end_indexes_one_session(tmp_path):
     assert 'tools: ["Bash"]' in fm
     assert 'summary: "do a thing"' in fm
     assert 'model: "claude-opus-4-8"' in fm
+    assert "tokens: 650" in fm  # 100 + 50 + 200 + 300, unquoted integer
     assert "## Notes" in fm
 
 
