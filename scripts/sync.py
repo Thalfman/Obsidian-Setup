@@ -53,6 +53,10 @@ DEFAULTS = {
     # resolved against the repo root; absolute paths are used as-is.
     "vault_dir": ".",
     "active_minutes": 30,
+    # Liveness tiers from a transcript's mtime: "active" within active_minutes,
+    # "idle" until active_minutes * idle_factor, "done" beyond. Three tiers so a
+    # stalled-but-open session stops masquerading as active.
+    "idle_factor": 4,
     "archive": False,
     "retention_days": 30,
     "name_map": {},
@@ -144,6 +148,38 @@ def split_preserved(text: str) -> str | None:
     return text[idx + 1 :]
 
 
+def token_sum(usage) -> int:
+    """Total tokens for one assistant record's `message.usage` dict.
+
+    Sums prompt, completion, and both cache token counts; any missing or
+    non-integer sub-key defaults to 0. A missing/non-dict `usage` yields 0.
+    """
+    if not isinstance(usage, dict):
+        return 0
+    total = 0
+    for key in ("input_tokens", "output_tokens",
+                "cache_read_input_tokens", "cache_creation_input_tokens"):
+        value = usage.get(key, 0)
+        if isinstance(value, (int, float)):
+            total += int(value)
+    return total
+
+
+def liveness(now: float, mtime: float, active_minutes: int, idle_factor: int) -> str:
+    """Three-tier freshness from a transcript's mtime (all epoch seconds).
+
+    "active" within active_minutes; "idle" within active_minutes * idle_factor;
+    "done" beyond that. Both thresholds are inclusive. A stalled-but-open
+    session ages out of "active" instead of reading live forever.
+    """
+    age = now - mtime
+    if age <= active_minutes * 60:
+        return "active"
+    if age <= active_minutes * 60 * idle_factor:
+        return "idle"
+    return "done"
+
+
 # --------------------------------------------------------------------------- #
 # history index (first prompt per session, for local summaries)
 # --------------------------------------------------------------------------- #
@@ -175,6 +211,7 @@ def parse_session(path: Path) -> dict | None:
     timestamps: list[str] = []
     tools: set[str] = set()
     msg_count = 0
+    tokens = 0
 
     for rec in iter_jsonl(path):
         if rec.get("sessionId"):
@@ -197,6 +234,7 @@ def parse_session(path: Path) -> dict | None:
         if isinstance(msg, dict):
             if not model and msg.get("model"):
                 model = msg["model"]
+            tokens += token_sum(msg.get("usage"))
             content = msg.get("content")
             if isinstance(content, list):
                 for block in content:
@@ -214,6 +252,7 @@ def parse_session(path: Path) -> dict | None:
         "start": timestamps[0],
         "end": timestamps[-1],
         "message_count": msg_count,
+        "tokens": tokens,
         "tools": sorted(tools),
         "branch": branch,
         "cc_version": version,
@@ -240,7 +279,8 @@ def included(cwd: str, allow: list, deny: list) -> bool:
 # --------------------------------------------------------------------------- #
 # note rendering
 # --------------------------------------------------------------------------- #
-def render_session_note(s: dict, project: str, summary: str, status: str) -> str:
+def render_session_note(s: dict, project: str, summary: str, status: str,
+                        last_synced: str) -> str:
     fm = [
         "---",
         "type: session",
@@ -256,6 +296,8 @@ def render_session_note(s: dict, project: str, summary: str, status: str) -> str
         f"branch: {yq(s['branch'])}",
         f"cc_version: {yq(s['cc_version'])}",
         f"model: {yq(s['model'])}",
+        f"tokens: {s['tokens']}",
+        f"last_synced: {yq(last_synced)}",
         "source: auto",
         "---",
     ]
@@ -309,7 +351,10 @@ def write_note(target: Path, content: str, dry: bool, state: dict, key: str,
     # The machine-owned region is everything up to (and including) the marker.
     # Hash only that, so edits below `## Notes` never trigger a rewrite.
     head = content[: content.rfind("\n" + NOTES_MARKER) + 1]
-    digest = hashlib.sha256(head.encode("utf-8")).hexdigest()[:16]
+    # last_synced is stamped fresh on every render; exclude it from the change
+    # hash so a note whose real content is unchanged still skips (idempotency).
+    hashable = re.sub(r"(?m)^last_synced: .*\n", "", head)
+    digest = hashlib.sha256(hashable.encode("utf-8")).hexdigest()[:16]
     prior = state.get(key)
     if prior and prior.get("hash") == digest and prior.get("mtime") == source_mtime:
         return "skip"
@@ -336,6 +381,37 @@ def archive_transcript(src: Path, project_slug: str, vault: Path, dry: bool) -> 
     return True
 
 
+def prune_archive(vault: Path, retention_days: int, now: float, dry: bool) -> int:
+    """Delete gzipped archives older than `retention_days`. Return the count.
+
+    Only ever touches files under `vault/Archive` — never the read-only
+    `~/.claude`. retention_days <= 0 disables pruning (returns 0), so the
+    feature is strictly opt-in and a misconfigured 0 can't wipe archives.
+    """
+    archive_root = vault / "Archive"
+    if retention_days <= 0 or not archive_root.is_dir():
+        return 0
+    root = archive_root.resolve()
+    cutoff = now - retention_days * 86400
+    pruned = 0
+    for gz in archive_root.glob("**/*.jsonl.gz"):
+        if not gz.is_file():
+            continue
+        # Never unlink a path that resolves outside Archive (e.g. via a symlink
+        # or junction planted in the tree). Keeps the read-only boundary on
+        # ~/.claude literally true, not merely true for ordinary trees.
+        try:
+            if not gz.resolve().is_relative_to(root):
+                continue
+        except OSError:
+            continue
+        if gz.stat().st_mtime < cutoff:
+            if not dry:
+                gz.unlink()
+            pruned += 1
+    return pruned
+
+
 # --------------------------------------------------------------------------- #
 # main
 # --------------------------------------------------------------------------- #
@@ -344,6 +420,8 @@ def main() -> int:
     ap.add_argument("--dry-run", action="store_true", help="print actions, write nothing")
     ap.add_argument("--since", metavar="WHEN", help="only sessions starting on/after this ISO date or datetime (overrides config)")
     ap.add_argument("--archive", action="store_true", help="gzip raw transcripts into /Archive")
+    ap.add_argument("--prune-archive", action="store_true",
+                    help="delete archives older than retention_days (config); honors --dry-run")
     ap.add_argument("--config", type=Path, help="path to sync-config.yaml")
     ap.add_argument("--vault", type=Path, help="override vault root")
     ap.add_argument("--minutes", type=int, help="override active-window minutes")
@@ -363,6 +441,7 @@ def main() -> int:
         vraw = Path(str(cfg["vault_dir"])).expanduser()
         vault = vraw.resolve() if vraw.is_absolute() else (repo_root / vraw).resolve()
     active_minutes = args.minutes if args.minutes is not None else int(cfg["active_minutes"])
+    idle_factor = int(cfg["idle_factor"])
     do_archive = args.archive or bool(cfg["archive"])
     name_map = dict(cfg.get("name_map") or {})
     allow = list(cfg.get("allow") or [])
@@ -383,6 +462,7 @@ def main() -> int:
 
     history = build_history_index(claude_dir)
     now = datetime.now(timezone.utc).timestamp()
+    synced_at = datetime.fromtimestamp(now, timezone.utc).strftime("%Y-%m-%dT%H:%M")
 
     session_files = sorted(claude_dir.glob("projects/*/*.jsonl"))
     counts = {"create": 0, "update": 0, "skip": 0, "archived": 0, "excluded": 0}
@@ -400,13 +480,13 @@ def main() -> int:
 
         proj = project_name(s["path"], fallback=sf.parent.name, name_map=name_map)
         proj_slug = slugify(proj)
-        status = "active" if (now - s["source_mtime"]) <= active_minutes * 60 else "done"
+        status = liveness(now, s["source_mtime"], active_minutes, idle_factor)
         summary = sanitize_summary(history.get(s["session_id"], ""))
 
         fname = f"{s['start'][:10]}-{proj_slug}-{s['session_id'][:8]}.md"
         target = vault / "Sessions" / fname
         action = write_note(
-            target, render_session_note(s, proj, summary, status),
+            target, render_session_note(s, proj, summary, status, synced_at),
             args.dry_run, state, key=f"session:{s['session_id']}",
             source_mtime=s["source_mtime"],
         )
@@ -436,12 +516,17 @@ def main() -> int:
         if action != "skip":
             counts[action] = counts.get(action, 0) + 1
 
+    pruned = 0
+    if args.prune_archive:
+        pruned = prune_archive(vault, int(cfg["retention_days"]), now, args.dry_run)
+
     if not args.dry_run:
         atomic_write(state_path, json.dumps(state, indent=2))
 
     tag = "[dry-run] " if args.dry_run else ""
     print(f"{tag}sessions+hubs  created={counts['create']} updated={counts['update']} "
-          f"skipped={counts['skip']} excluded={counts['excluded']} archived={counts['archived']}")
+          f"skipped={counts['skip']} excluded={counts['excluded']} archived={counts['archived']} "
+          f"pruned={pruned}")
     print(f"{tag}projects: {len(projects)}  vault: {vault}")
     return 0
 

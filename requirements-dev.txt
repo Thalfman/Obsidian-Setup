@@ -1,0 +1,5 @@
+# Dev/test dependencies only. sync.py is stdlib-only at runtime; these are
+# needed to run the test suite and to enable the optional YAML config file.
+# Pinned for reproducible CI on the public repo.
+pytest==9.0.3
+PyYAML==6.0.2

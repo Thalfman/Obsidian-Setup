@@ -28,6 +28,10 @@ since: "2026-05-30T00:00"
 # A session is "active" if its .jsonl was modified within this many minutes.
 active_minutes: 30
 
+# Liveness tiers: "active" within active_minutes, "idle" until
+# active_minutes * idle_factor, then "done".
+idle_factor: 4
+
 # Archive raw transcripts (gzipped) before Claude Code prunes them.
 archive: false
 retention_days: 30

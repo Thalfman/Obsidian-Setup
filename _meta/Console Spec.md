@@ -31,7 +31,12 @@ parsing/summaries are local; no cloud model ever sees transcript content.
 
 ## Frontmatter
 Session: type, project, session_id, path, start, end, message_count, tools,
-status, summary, branch, cc_version, model, tokens, source.
+status, summary, branch, cc_version, model, tokens, last_synced, source.
+`status` is active / idle / done — source mtime within active_minutes, within
+active_minutes × idle_factor, or beyond. `tokens` sums input + output + cache
+usage across assistant records. `last_synced` is the UTC minute the machine
+region was last (re)written; it is excluded from the change hash, so it never
+forces a rewrite.
 Project: type, project, path, status, last_session, session_count,
 key_commands, cc_link.
 Body convention: everything below `## Notes` is human-owned and never rewritten.
@@ -49,9 +54,9 @@ Body convention: everything below `## Notes` is human-owned and never rewritten.
 - [x] Phase 0 boundary + skeleton + theme/CSS
 - [x] Phase 1 templates
 - [x] Phase 2 sync.py + dashboards
-- [ ] Phase 3 launch wiring from board rows + liveness polish
-- [ ] Phase 4 QuickAdd launcher macro + hotkeys
-- [ ] Phase 5 archival schedule + Activity.base + Style Settings
+- [ ] Phase 3 launch wiring from board rows (GUI packet 07) — liveness polish done
+- [ ] Phase 4 QuickAdd launcher macro + hotkeys (GUI packet 08)
+- [ ] Phase 5 archival scheduling — Activity.base, Style Settings, archival + retention prune done; cron schedule pending
 
 ## Open questions
 - Auto-link session notes to a CommandCenter hub (`cc_link`), or stay decoupled?
