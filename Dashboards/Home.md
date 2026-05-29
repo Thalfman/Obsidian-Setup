@@ -43,11 +43,17 @@ views:
 
 ---
 
+<span class="label">activity</span>
+## Effort & tokens
+![[Activity.base]]
+
+---
+
 <span class="label">boards</span>
 ## Drill in
 - [[Sessions]] — active and recent, across this vault
 - [[Projects]] — launch hubs, newest activity first
-- [[Activity]] — effort and token rollup *(added by packet 01)*
+- [[Activity]] — effort and token rollup
 
 ---
 
