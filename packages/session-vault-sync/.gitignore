@@ -1,0 +1,26 @@
+# Python and development outputs
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.coverage
+htmlcov/
+.venv/
+venv/
+build/
+dist/
+
+# Local data and configuration. These rules do not protect another vault.
+/Sessions/
+/Projects/
+/Archive/
+/_meta/
+/sync-config.yaml
+.env
+.env.*
+
+# Editor and operating-system files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
