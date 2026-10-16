@@ -1,0 +1,77 @@
+name: Publish session-vault-sync to PyPI
+
+# Configure the matching PyPI trusted publisher and the protected pypi
+# environment before dispatching this workflow. Every release needs approval.
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: publish-session-vault-sync
+  cancel-in-progress: false
+
+jobs:
+  build:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: packages/session-vault-sync
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+      - name: Install package and test tools
+        run: python -m pip install ".[dev]"
+      - name: Run package tests
+        run: python -m pytest
+      - name: Build wheel and source distribution
+        run: python -m build
+      - name: Check distribution metadata
+        run: python -m twine check dist/*
+      - name: Smoke-test the built wheel
+        run: |
+          python -m venv "${RUNNER_TEMP}/session-vault-wheel"
+          "${RUNNER_TEMP}/session-vault-wheel/bin/python" -m pip install dist/*.whl
+          cd "${RUNNER_TEMP}"
+          "${RUNNER_TEMP}/session-vault-wheel/bin/session-vault-sync" --help
+      - name: Save verified distributions
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: session-vault-sync-dist
+          path: packages/session-vault-sync/dist/*
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    needs: build
+    # Fail closed until the pypi environment has been verified to require
+    # Thalfman approval, allow only the main branch, and disallow admin bypass.
+    # Remove the literal false guard only after that setup is confirmed.
+    if: false && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: pypi
+      url: https://pypi.org/project/session-vault-sync/
+    permissions:
+      id-token: write
+    steps:
+      # No checkout or package build runs in the OIDC-enabled job.
+      - name: Download verified distributions from this run
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: session-vault-sync-dist
+          path: dist
+      - name: Publish with PyPI trusted publishing
+        uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33 # release/v1
+        with:
+          packages-dir: dist/
+          attestations: true
