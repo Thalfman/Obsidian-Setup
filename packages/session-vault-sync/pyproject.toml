@@ -1,0 +1,49 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "session-vault-sync"
+version = "0.1.0"
+description = "Local Claude Code session notes and optional transcript archives for Markdown vaults"
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "Thomas Halfman" }]
+dependencies = ["PyYAML>=6,<7"]
+keywords = ["claude-code", "obsidian", "markdown", "sessions", "local-first"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Topic :: Utilities",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8,<9", "build>=1,<2", "twine>=6,<7"]
+
+[project.scripts]
+session-vault-sync = "session_vault_sync.sync:main"
+
+[project.urls]
+"Source" = "https://github.com/Thalfman/Obsidian-Setup/tree/main/packages/session-vault-sync"
+"Issues" = "https://github.com/Thalfman/Obsidian-Setup/issues"
+"Security" = "https://github.com/Thalfman/Obsidian-Setup/blob/main/packages/session-vault-sync/SECURITY.md"
+"Original project" = "https://github.com/Thalfman/Obsidian-Setup"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["session_vault_sync*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"

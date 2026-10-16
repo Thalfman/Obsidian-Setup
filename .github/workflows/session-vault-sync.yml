@@ -1,0 +1,66 @@
+name: session-vault-sync package checks
+
+on:
+  push:
+    paths:
+      - "packages/session-vault-sync/**"
+      - ".github/workflows/session-vault-sync.yml"
+  pull_request:
+    paths:
+      - "packages/session-vault-sync/**"
+      - ".github/workflows/session-vault-sync.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    working-directory: packages/session-vault-sync
+
+jobs:
+  test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest]
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
+        include:
+          - os: windows-latest
+            python-version: "3.14"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: packages/session-vault-sync/pyproject.toml
+      - name: Install package and test tools
+        run: python -m pip install -e ".[dev]"
+      - name: Run tests
+        run: python -m pytest
+      - name: Check installed command
+        run: session-vault-sync --help
+
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: packages/session-vault-sync/pyproject.toml
+      - name: Install build tools
+        run: python -m pip install build twine
+      - name: Build wheel and source distribution
+        run: python -m build
+      - name: Check distribution metadata
+        run: python -m twine check dist/*
+      - name: Smoke-test wheel installation
+        run: |
+          python -m venv /tmp/session-vault-wheel
+          /tmp/session-vault-wheel/bin/python -m pip install dist/*.whl
+          cd /tmp
+          /tmp/session-vault-wheel/bin/session-vault-sync --help
