@@ -52,10 +52,8 @@ jobs:
 
   publish:
     needs: build
-    # Fail closed until the pypi environment has been verified to require
-    # Thalfman approval, allow only the main branch, and disallow admin bypass.
-    # Remove the literal false guard only after that setup is confirmed.
-    if: false && github.ref == 'refs/heads/main'
+    # The protected pypi environment requires owner approval before publishing.
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     environment:
