@@ -5,10 +5,12 @@ on:
     paths:
       - "packages/session-vault-sync/**"
       - ".github/workflows/session-vault-sync.yml"
+      - ".github/workflows/publish-session-vault-sync.yml"
   pull_request:
     paths:
       - "packages/session-vault-sync/**"
       - ".github/workflows/session-vault-sync.yml"
+      - ".github/workflows/publish-session-vault-sync.yml"
   workflow_dispatch:
 
 permissions:
